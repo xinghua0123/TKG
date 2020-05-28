@@ -37,8 +37,35 @@ Example AWS policy file:
 }
 ```
 Only replace the **YOURHOSTEDZONEID** with your DNS Hosted Zone ID.
-And attach the policy to user.
+And **attach** the policy to user.<br/>
+
 And make sure your AWS config is at `~/.aws/config`
+Example credentials config file:
+```shell
+[default]
+aws_access_key_id=XXXXXXXX
+aws_secret_access_key=XXXXXXX
+```
+Replace the id with the user credentials
+
+### 3. Generation of certificates
+```shell
+sudo certbot certonly \
+--dns-route53 \
+--dns-route53-propagation-seconds 5 \
+-d this.is.an.example.com
+```
+Then 4 files will be generated:<br/>
+`privkey.pem`  : the private key for your certificate.<br/>
+`fullchain.pem`: the certificate file used in most server software.<br/>
+`chain.pem`    : used for OCSP stapling in Nginx >=1.3.7.<br/>
+`cert.pem`     : will break many server configurations, and should not be used without reading further documentation (see link below). <br/>
+
+The valid period of the certificates is **3** months. For renewal purpose, please use the same command as above.<br/>
+
+### 4. Application Configuration
+For application to use the certificates, a secret containing tls.crt and tls.key shall be created.<br/>
+Taking harbor as an example, while deploying using Bitnami helm chart, overwrite the values for `service.tls.secretName`.
 
 ## Prerequisites
-1. A TKG Kubernetes cluster built on AWS EC2
+1. A TKG Kubernetes cluster built on AWS EC
