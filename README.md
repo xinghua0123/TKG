@@ -139,12 +139,12 @@ a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com has 
 a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com has address 3.0.88.159
 ```
 
-### 4. Deploy the Staging Let’s Encrypt cluster issuer
+### 4. Deploy the Staging Let’s Encrypt Cluster Issuer
 cert-manager supports two different CRDs for configuration, an **Issuer**, which is scoped to a single namespace, and a **ClusterIssuer**, which is cluster-wide.
 
 In our case, in order to serve HTTPS traffic for an Ingress in all namespaces, we choose ClusterIssuer. 
 
-Create a file called letsencrypt-staging.yaml with the following contents:
+Create a file called ```letsencrypt-staging.yaml``` with the following contents:
 ```yaml
 apiVersion: cert-manager.io/v1alpha2
 kind: ClusterIssuer
@@ -162,7 +162,7 @@ spec:
         ingress:
           class: contour
 ```
-Replace user@example.com with your email address. This is the email address that Let’s Encrypt uses to communicate with you about certificates you request.
+Replace ```user@example.com``` with your email address. This is the email address that Let’s Encrypt uses to communicate with you about certificates you request.
 
 The staging Let’s Encrypt server is not bound by the API rate limits of the production server. The main limit for production server is Certificates per Registered Domain (50 per week).
 
@@ -175,8 +175,9 @@ clusterissuer "letsencrypt-staging" created
 ```
 
 ### 5. Deploy Grafana
-Deploy the Grafana using helm chart from Bitnami. Make sure you add the helm repo before deploying.
-```
+Deploy the Grafana using helm chart from Bitnami. Make sure you add the helm repo before deploying and default storageclass is set for dynamic provisioning of PV.
+```shell
+helm repo add bitnami https://charts.bitnami.com/bitnami
 helm install grafana bitnami/grafana
 ```
 By default, it will create a service with type ClusterIP and port 3000.
@@ -192,7 +193,7 @@ Expose the Service to the world with Contour and an Ingress object. Create a fil
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: httpbin
+  name: my-ingress
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-staging
     ingress.kubernetes.io/force-ssl-redirect: "true"
@@ -216,8 +217,6 @@ spec:
 ```ingress.kubernetes.io/force-ssl-redirect: "true"```: Tells Contour to redirect HTTP requests to the HTTPS site.
 ```kubernetes.io/ingress.class: contour```: Tells Contour that it should handle this Ingress object.
 
-The certificate is issued in the name of the hosts listed in the ```tls:``` section, grafana.aws.ronk8s.cf and stored in the secret grafana. Behind the scenes, cert-manager creates a certificate CRD to manage the lifecycle of the certificate, and then a series of other CRDs to handle the challenge process.
-
 The host name, ```grafana.aws.ronk8s.cf``` is a CNAME to the ```envoy.aws.ronk8s.cf``` record that was created in the first section, and must be created in the same place as the ```envoy.aws.ronk8s.cf``` record was. That is, in your cloud provider. This lets requests to ```grafana.aws.ronk8s.cf``` resolve to the external IP address of the Contour service. They are then forwarded to the Contour pods running in the cluster:
 ```
 nslookup grafana.aws.ronk8s.cf                                                                                                 
@@ -232,3 +231,134 @@ Address: 13.229.221.89
 Name:	a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com
 Address: 3.0.88.159
 ```
+The certificate is issued in the name of the hosts listed in the ```tls:``` section, grafana.aws.ronk8s.cf and stored in the secret grafana. Behind the scenes, cert-manager creates a certificate CRD to manage the lifecycle of the certificate, and then a series of other CRDs to handle the challenge process.
+
+Wait for the certificate to be issued:
+```shell
+kubectl describe certificate grafana | tail -n 12  
+    Kind:       ClusterIssuer
+    Name:       letsencrypt-prod
+  Secret Name:  grafana
+Status:
+  Conditions:
+    Last Transition Time:  2020-05-28T09:24:30Z
+    Message:               Certificate is up to date and has not expired
+    Reason:                Ready
+    Status:                True
+    Type:                  Ready
+  Not After:               2020-08-26T08:24:28Z
+Events:                    <none>
+```
+A ```kubernetes.io/tls``` secret is created with the secretName specified in the tls: field of the Ingress.
+```
+kubectl get secret grafana    
+NAME      TYPE                DATA   AGE
+grafana   kubernetes.io/tls   3      20h
+```
+
+You can now visit the site, ```https://grafana.aws.ronk8s.cf``` but with a huge security warning! This is because the certificate was issued by the Let’s Encrypt staging servers and has a fake CA. 
+
+### 7. Switch to Let’s Encrypt Production Cluster Issuer
+Create a file called letsencrypt-prod.yaml with the following contents and deploy it:
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  namespace: cert-manager
+spec:
+spec:
+  acme:
+    email: user@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    server: https://acme-v02.api.letsencrypt.org/directory
+    solvers:
+    - http01:
+        ingress:
+          class: contour
+```
+```shell
+kubectl apply -f letsencrypt-prod.yaml
+clusterissuer "letsencrypt-prod" created
+```
+
+Then edit the ingress to use the production cluster issuer as shown below:
+```yaml
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+```
+Next, delete the existing certificate CRD and the Secret that contains the untrusted staging certificate. This triggers cert-manager to request the certificate again from the Let’s Encrypt production servers.
+```shell
+kubectl delete certificate grafana
+kubectl delete secret grafana
+```
+
+Check that the grafana Secret is recreated, to make sure that the certificate is issued again. Now revisiting our https://grafana.aws.ronk8s.cf site should show a valid, trusted, HTTPS certificate.
+
+### 8. Add Another Service (e.g.Harbor) Using Same Ingress
+Deploy harbor helm char from goharbor, make sure the helm repo is added.
+```shell
+helm repo add harbor https://helm.goharbor.io
+helm install harbor harbor/harbor
+```
+Deployment will take few minutes to complete. Please make sure a service named harbor-harbor-portal is created and exposed on port 80.
+```shell
+kubectl get svc harbor-harbor-portal  
+NAME                   TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
+harbor-harbor-portal   ClusterIP   10.99.91.97   <none>        80/TCP    133m
+```
+Next, we will add the DNS the entry (CNAME) for harbor in AWS similar to what we did for grafana.
+```shell
+nslookup harbor.aws.ronk8s.cf   
+Server:		192.168.0.1
+Address:	192.168.0.1#53
+
+Non-authoritative answer:
+harbor.aws.ronk8s.cf	canonical name = envoy.aws.ronk8s.cf.
+envoy.aws.ronk8s.cf	canonical name = a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com.
+Name:	a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com
+Address: 13.229.221.89
+Name:	a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com
+Address: 3.0.88.159
+```
+Finally we will edit the ingress to add the entry for harbor.
+```yaml
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+    kubernetes.io/ingress.class: contour
+    kubernetes.io/tls-acme: "true"
+spec:
+  tls:
+  - secretName: grafana
+    hosts:
+    - grafana.aws.ronk8s.cf
+  - secretName: harbor
+    hosts:
+    - harbor.aws.ronk8s.cf
+  rules:
+  - host: grafana.aws.ronk8s.cf
+    http:
+      paths:
+      - backend:
+          serviceName: grafana
+          servicePort: 3000
+  - host: harbor.aws.ronk8s.cf
+    http:
+      paths:
+      - backend:
+          serviceName: harbor-harbor-portal
+          servicePort: 80
+```
+This is what we normally referred to **Name based virtual hosting**. Name-based virtual hosts support routing HTTP traffic to multiple host names at the same IP address.
+
+Check that the harbor Secret is recreated, to make sure that the certificate is issued as well. Now visiti our https://harbor.aws.ronk8s.cf site should show a valid, trusted, HTTPS certificate.
