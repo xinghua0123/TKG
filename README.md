@@ -213,10 +213,10 @@ spec:
           serviceName: grafana
           servicePort: 3000
 ```
-```cert-manager.io/cluster-issuer: letsencrypt-staging```: tells cert-manager to use the letsencrypt-staging cluster issuer you just created.
-```kubernetes.io/tls-acme: "true"```: Tells cert-manager to do ACME TLS (what Let’s Encrypt uses).
-```ingress.kubernetes.io/force-ssl-redirect: "true"```: Tells Contour to redirect HTTP requests to the HTTPS site.
-```kubernetes.io/ingress.class: contour```: Tells Contour that it should handle this Ingress object.
+```cert-manager.io/cluster-issuer: letsencrypt-staging```: tells cert-manager to use the letsencrypt-staging cluster issuer you just created. <br/>
+```kubernetes.io/tls-acme: "true"```: Tells cert-manager to do ACME TLS (what Let’s Encrypt uses).<br/>
+```ingress.kubernetes.io/force-ssl-redirect: "true"```: Tells Contour to redirect HTTP requests to the HTTPS site.<br/>
+```kubernetes.io/ingress.class: contour```: Tells Contour that it should handle this Ingress object.<br/>
 
 The host name, ```grafana.aws.ronk8s.cf``` is a CNAME to the ```envoy.aws.ronk8s.cf``` record that was created in the first section, and must be created in the same place as the ```envoy.aws.ronk8s.cf``` record was. That is, in your cloud provider. This lets requests to ```grafana.aws.ronk8s.cf``` resolve to the external IP address of the Contour service. They are then forwarded to the Contour pods running in the cluster:
 ```
