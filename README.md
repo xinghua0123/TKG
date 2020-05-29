@@ -124,7 +124,7 @@ Hostname: helloweb-7cd97b9cb8-vmnbj
 ### 3. Configure DNS for Envoy
 Retrieve the external address of the load balancer assigned to Contour’s Envoys by your cloud provider:
 ```
-kubectl get svc -n tanzu-system-ingress                                                                                                      
+$ kubectl get svc -n tanzu-system-ingress                                                                                                      
 NAME      TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)                      AGE
 contour   ClusterIP      10.109.148.227   <none>                                                                        8001/TCP                     9d
 envoy     LoadBalancer   10.104.132.243   a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com   80:30812/TCP,443:30171/TCP   9d
@@ -134,7 +134,8 @@ The value of EXTERNAL-IP varies by cloud provider. In our case, AWS gives a long
 To make it easier to work with the external load balancer, we will add a DNS record to a domain we control that points to this load balancer’s IP address.
 On AWS, you specify a CNAME, not an A record, and it would look something like this:
 ```
-host envoy.aws.ronk8s.cf                                                                                                        envoy.aws.ronk8s.cf is an alias for a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com.
+$ host envoy.aws.ronk8s.cf   
+envoy.aws.ronk8s.cf is an alias for a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com.
 a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com has address 13.229.221.89
 a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com has address 3.0.88.159
 ```
@@ -170,7 +171,7 @@ We will use staging environment to test your environment without worrying about 
 
 Deploy the clusterissuer:
 ```shell
-kubectl apply -f letsencrypt-staging.yaml
+$ kubectl apply -f letsencrypt-staging.yaml
 clusterissuer "letsencrypt-staging" created
 ```
 
@@ -182,7 +183,7 @@ helm install grafana bitnami/grafana
 ```
 By default, it will create a service with type ClusterIP and port 3000.
 ```
-kubectl get svc grafana                                             
+$ kubectl get svc grafana                                             
 NAME      TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
 grafana   ClusterIP   10.103.205.169   <none>        3000/TCP   19h
 ```
@@ -219,7 +220,7 @@ spec:
 
 The host name, ```grafana.aws.ronk8s.cf``` is a CNAME to the ```envoy.aws.ronk8s.cf``` record that was created in the first section, and must be created in the same place as the ```envoy.aws.ronk8s.cf``` record was. That is, in your cloud provider. This lets requests to ```grafana.aws.ronk8s.cf``` resolve to the external IP address of the Contour service. They are then forwarded to the Contour pods running in the cluster:
 ```
-nslookup grafana.aws.ronk8s.cf                                                                                                 
+$ nslookup grafana.aws.ronk8s.cf 
 Server:		192.168.0.1
 Address:	192.168.0.1#53
 
@@ -235,7 +236,7 @@ The certificate is issued in the name of the hosts listed in the ```tls:``` sect
 
 Wait for the certificate to be issued:
 ```shell
-kubectl describe certificate grafana | tail -n 12  
+$ kubectl describe certificate grafana | tail -n 12  
     Kind:       ClusterIssuer
     Name:       letsencrypt-prod
   Secret Name:  grafana
@@ -251,7 +252,7 @@ Events:                    <none>
 ```
 A ```kubernetes.io/tls``` secret is created with the secretName specified in the tls: field of the Ingress.
 ```
-kubectl get secret grafana    
+$ kubectl get secret grafana    
 NAME      TYPE                DATA   AGE
 grafana   kubernetes.io/tls   3      20h
 ```
@@ -279,7 +280,7 @@ spec:
           class: contour
 ```
 ```shell
-kubectl apply -f letsencrypt-prod.yaml
+$ kubectl apply -f letsencrypt-prod.yaml
 clusterissuer "letsencrypt-prod" created
 ```
 
@@ -308,13 +309,13 @@ helm install harbor harbor/harbor
 ```
 Deployment will take few minutes to complete. Please make sure a service named harbor-harbor-portal is created and exposed on port 80.
 ```shell
-kubectl get svc harbor-harbor-portal  
+$ kubectl get svc harbor-harbor-portal  
 NAME                   TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
 harbor-harbor-portal   ClusterIP   10.99.91.97   <none>        80/TCP    133m
 ```
 Next, we will add the DNS the entry (CNAME) for harbor in AWS similar to what we did for grafana.
 ```shell
-nslookup harbor.aws.ronk8s.cf   
+$ nslookup harbor.aws.ronk8s.cf   
 Server:		192.168.0.1
 Address:	192.168.0.1#53
 
