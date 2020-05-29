@@ -363,3 +363,21 @@ spec:
 This is what we normally referred to **Name based virtual hosting**. Name-based virtual hosts support routing HTTP traffic to multiple host names at the same IP address.
 
 Check that the harbor Secret is recreated, to make sure that the certificate is issued as well. Now visiti our https://harbor.aws.ronk8s.cf site should show a valid, trusted, HTTPS certificate.
+
+## Example of DNS Records
+
+```
+envoy.aws.ronk8s.cf.
+CNAME
+a1b17f5b46a70473da8f81fc14330142-863409382.ap-southeast-1.elb.amazonaws.com
+-
+-
+grafana.aws.ronk8s.cf.
+CNAME
+envoy.aws.ronk8s.cf
+-
+-
+harbor.aws.ronk8s.cf.
+CNAME
+envoy.aws.ronk8s.cf
+``
