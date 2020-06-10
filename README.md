@@ -238,7 +238,7 @@ Wait for the certificate to be issued:
 ```shell
 $ kubectl describe certificate grafana | tail -n 12  
     Kind:       ClusterIssuer
-    Name:       letsencrypt-prod
+    Name:       letsencrypt-staging
   Secret Name:  grafana
 Status:
   Conditions:
